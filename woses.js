@@ -25,7 +25,7 @@ var
   sys   = require('sys'),
   posix = require('posix'),
   http  = require('http'),
-  wwwforms  = require('./coltrane/module/www-forms');
+  wwwforms  = require('./www-forms');
 
 
 http.createServer(function(req, res) {
@@ -38,7 +38,8 @@ http.createServer(function(req, res) {
     if (req.uri.path == '/')
       req.uri.path = '/index.php';
 
-    var parts = RegExp("^/([a-z\\.]+?\\.([a-z]+))$")(req.uri.path);
+    // TODO: exclude ".." in uri
+    var parts = RegExp("^/(.+?\\.([a-z]+))$")(req.uri.path);
     if (!parts) {
       res.sendHeader(404);
       res.sendBody("404: I have no idea what you're talking about", 'utf8');
@@ -48,7 +49,7 @@ http.createServer(function(req, res) {
     var filename = parts[1];
     var ext = parts[2];
 
-    filetypes = {
+    var filetypes = {
       "css" : "text/css",
       "html": "text/html",
       "ico" : "image/vnd.microsoft.icon",
@@ -58,7 +59,7 @@ http.createServer(function(req, res) {
       "xml" : "application/xml",
       "xul" : "application/vnd.mozilla.xul+xml",
     };
-    content_type = filetypes[ext] || "text/html";
+    var content_type = filetypes[ext] || "text/html";
     
     var encoding = (content_type.slice(0,4) === 'text' ? 'utf8' : 'binary');
     
@@ -81,7 +82,7 @@ http.createServer(function(req, res) {
 
 
     function respondWithPhp(callback) {
-      body = '';
+      var body = '';
       
       var params = ['parp.php', filename, '--dir=' + documentRoot];
       for (var param in req.uri.params)
