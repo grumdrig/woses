@@ -26,7 +26,7 @@ filenames = sys.argv[1:] or ["woses.js"]
 
 def handler():
   print "\n\n"
-  os.system("killall -v node; node %s &" % filenames[0])
+  os.system("killall -v node; node woses.js ../pq9x/ &")
 
 mtime = []
 while True:

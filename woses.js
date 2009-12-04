@@ -14,18 +14,58 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 */
 
+//
 // HTTP server for static and PHP files via Node.js (nodejs.org)
-// Usage: node woses.js
-// Configure by editing the two lines below:
-
-var port = 8080;
-var documentRoot = "../pq9x/";
+// See http://bitbucket.org/grumdrig/woses/wiki/Home
+//
+// Usage: node woses.js [--port PORT] DOCUMENT_ROOT/
+//
 
 var 
   sys   = require('sys'),
   posix = require('posix'),
   http  = require('http'),
   wwwforms  = require('./www-forms');
+
+
+function getopt(argv) {
+  // Presume all --opt flags have 1 argument, all -o flags don't
+  var opts = {};
+  var i = 0;
+  for (; i < argv.length; ++i) {
+    if (argv[i].substr(0,2) == "--") {
+      opts[argv[i]] = argv[i+1];
+      ++i;
+    } else if (argv[i].substr(0,1) == "-") {
+      opts[argv[i]] = (opts[argv[i]] || 0) + 1;
+    } else {
+      break;
+    }
+  }
+  return [opts, argv.slice(i)];
+}
+
+
+var oa = getopt(process.ARGV.slice(2));
+var opts = oa[0];
+var args = oa[1];
+
+var port = opts['--port'] || 8080;
+var documentRoot = args[0];
+if (documentRoot.substr(-1) != '/')
+  documentRoot += "/";
+
+
+var filetypes = {
+  "css" : "text/css",
+  "html": "text/html",
+  "ico" : "image/vnd.microsoft.icon",
+  "jpg" : "image/jpeg",
+  "js"  : "application/javascript",
+  "png" : "image/png",
+  "xml" : "application/xml",
+  "xul" : "application/vnd.mozilla.xul+xml",
+};
 
 
 http.createServer(function(req, res) {
@@ -38,28 +78,17 @@ http.createServer(function(req, res) {
     if (req.uri.path == '/')
       req.uri.path = '/index.php';
 
-    // TODO: exclude ".." in uri
-    var parts = RegExp("^/(.+?\\.([a-z]+))$")(req.uri.path);
-    if (!parts) {
-      res.sendHeader(404);
-      res.sendBody("404: I have no idea what you're talking about", 'utf8');
-      res.finish();
-      return;
-    }
-    var filename = parts[1];
-    var ext = parts[2];
+    // Exclude ".." in uri
+    if (req.uri.path.indexOf('..') >= 0)
+      return respond(403, null, "403: Don't hack me, bro");
 
-    var filetypes = {
-      "css" : "text/css",
-      "html": "text/html",
-      "ico" : "image/vnd.microsoft.icon",
-      "jpg" : "image/jpeg",
-      "js"  : "application/javascript",
-      "png" : "image/png",
-      "xml" : "application/xml",
-      "xul" : "application/vnd.mozilla.xul+xml",
-    };
-    var content_type = filetypes[ext] || "text/html";
+    var parts = RegExp("^/(.+?(\\.([a-z]+))?)$")(req.uri.path);
+    if (!parts)
+      return respond(400, null, "400: I have no idea what that is");
+
+    var filename = parts[1];
+    var ext = parts[3];
+    var content_type = filetypes[ext] || "text/plain";
     
     var encoding = (content_type.slice(0,4) === 'text' ? 'utf8' : 'binary');
     
@@ -110,12 +139,15 @@ http.createServer(function(req, res) {
               if (data != null) {
                 body += data;
               } else {
-                if (body.match("^<\\?xml"))
+                if (body.indexOf("<?xml") == 0)
                   content_type = "application/xml";
+                else
+                  content_type = "text/html";
                 headers = [['Content-Type', content_type],
                            ['Content-Length', body.length]];
                 sys.puts(req.requestLine + " (php) " + body.length);
-                callback(200, headers, body, encoding);
+                callback((body.indexOf("404:") == 0) ? 404 : 200, 
+                         headers, body, encoding);
               }
               setTimeout(function(){req.resume();});
             });
@@ -143,4 +175,5 @@ http.createServer(function(req, res) {
     
   }).listen(port);
 
-sys.puts('Woses running at http://127.0.0.1:' + port + '/');
+
+sys.puts('Woses running at http://127.0.0.1:' + port + '/ in ' + documentRoot);

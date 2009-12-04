@@ -52,11 +52,15 @@ for ($i = 2; $i < count($argv); ++$i) {
 }
 
 //ob_start();
-include($argv[1]);
+$included = @include($argv[1]);
 //$output = ob_get_contents();
 //ob_end_clean();
 
 //print $ouput;
+
+if (!$included) {
+  print "404: No sign of it";
+}
 
 //fputs(STDERR, $output);
 
