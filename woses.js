@@ -85,12 +85,13 @@ http.createServer(function(req, res) {
     if (req.uri.path.indexOf('..') >= 0)
       return respond(403, null, "403: Don't hack me, bro");
 
-    var parts = RegExp("^/(.+?(\\.([a-z]+))?)$")(req.uri.path);
+    var parts = RegExp("^/((.+?)(\\.([a-z]+))?)$")(req.uri.path);
     if (!parts)
       return respond(400, null, "400: I have no idea what that is");
 
     var filename = parts[1];
-    var ext = parts[3];
+    var basename = parts[2];
+    var ext = parts[4];
     var content_type = filetypes[ext] || "text/plain";
     
     var encoding = (content_type.slice(0,4) === 'text' ? 'utf8' : 'binary');
@@ -111,7 +112,6 @@ http.createServer(function(req, res) {
                    '404: I looked but did not find.');
         });
     }
-
 
     function respondWithPhp(callback) {
       var body = '';
@@ -172,6 +172,10 @@ http.createServer(function(req, res) {
   
     if (ext == "php") {
       respondWithPhp(respond);
+    } else if (filename.substr(-7) == "-rpc.js") {
+      // TODO: need a better way to distinguish client & server js
+      var script = require("./" + basename);
+      script.fetch(req, res, respond);
     } else {
       respondWithStatic(respond);
     }
