@@ -51,6 +51,9 @@ var opts = oa[0];
 var args = oa[1];
 
 var port = opts['--port'] || 8080;
+var index = opts['--index'] || "/index.html";
+if (index.substr(0,1) != '/')
+  index = '/' + index;
 var documentRoot = args[0];
 if (documentRoot.substr(-1) != '/')
   documentRoot += "/";
@@ -76,7 +79,7 @@ http.createServer(function(req, res) {
     //sys.puts(sys.inspect(req.headers));
 
     if (req.uri.path == '/')
-      req.uri.path = '/index.php';
+      req.uri.path = index;
 
     // Exclude ".." in uri
     if (req.uri.path.indexOf('..') >= 0)
