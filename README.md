@@ -1,7 +1,7 @@
 woses
 =====
 
-HTTP server for static and PHP files via Node.js (See nodejs.org)
+HTTP server for static and PHP files via [Node](http://nodejs.org/)
 
 Usage 
 -----

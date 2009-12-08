@@ -176,6 +176,10 @@ http.createServer(function(req, res) {
       // TODO: need a better way to distinguish client & server js
       var script = require("./" + basename);
       script.fetch(req, res, respond);
+    } else if (ext == "md") {
+      sys.exec("Markdown.pl < " + filename).addCallback(function (out,err) {
+        respond(200, [], out);
+      });
     } else {
       respondWithStatic(respond);
     }
