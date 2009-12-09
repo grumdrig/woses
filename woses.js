@@ -29,7 +29,6 @@ var
 
 
 function parseUri(path) {
-  sys.p(path);
   var parts = RegExp("^/((.+?)(\\.([a-z]+))?)$")(path);
   if (parts) {
     return {
@@ -92,38 +91,56 @@ http.createServer(function(req, res) {
 
   if (req.uri.path == '/')
     req.uri.path = config.index;
+  
+  res.respond = function (body) {
+    sys.p(this);
+    this.sendHeader(this.status || 200, this.headers);
+    this.body = body || this.body || "";
+    if (typeof this.body != 'string')
+      this.body = JSON.encode(this.body);
+    this.sendBody(this.body, this.encoding || 'utf8');
+    this.finish();
+  }
+
+  res.header = function(header, value) {
+    if (!this.headers) this.headers = [];
+    this.headers.push([header, value]);
+  }
 
   var uri = parseUri(req.uri.path);
-  if (!uri)
-    return respond(400, null, "400: I have no idea what that is");
+  if (!uri) {
+    res.status = 400;
+    return res.respond("400: I have no idea what that is");
+  }
 
   // Exclude ".." in uri
-  if (req.uri.path.indexOf('..') >= 0 || uri.filename.substr(1) == ".")
-    return respond(403, null, "403: Don't hack me, bro");
+  if (req.uri.path.indexOf('..') >= 0 || uri.filename.substr(1) == ".") {
+    res.status = 403;
+    return res.respond("403: Don't hack me, bro");
+  }
 
-  var content_type = config.mimetypes[uri.ext] || "text/plain";
-  
-  var encoding = (content_type.slice(0,4) === 'text' ? 'utf8' : 'binary');
-  
-  function respondWithStatic(callback) {
-    var promise = posix.cat(config.documentRoot + uri.filename, encoding);
+  function respondWithStatic() {
+    var content_type = config.mimetypes[uri.ext] || "text/plain";
+    res.encoding = (content_type.slice(0,4) === 'text' ? 'utf8' : 'binary');
+    var promise = posix.cat(config.documentRoot + uri.filename, res.encoding);
     promise.addCallback(function(data) {
-      headers = [['Content-Type', content_type],
-                 ['Content-Length', encoding === 'utf8' ? 
-                  encodeURIComponent(data).replace(/%../g, 'x').length : 
-                  data.length]];
+      res.header('Content-Type', content_type);
+      res.header('Content-Length', res.encoding === 'utf8' ? 
+                 encodeURIComponent(data).replace(/%../g, 'x').length : 
+                 data.length);
       sys.puts(req.requestLine + " " + data.length);
-      callback(200, headers, data, encoding);
+      res.respond(data);
     });
     promise.addErrback(function() {
       sys.puts("Error 404: " + uri.filename);
-      callback(404, [['Content-Type', 'text/plain']], 
-               '404: I looked but did not find.');
+      res.status = 404;
+      res.header('Content-Type', 'text/plain');
+      res.respond('404: I looked but did not find.');
     });
   }
 
-  function respondWithPhp(callback) {
-    var body = '';
+  function respondWithPhp() {
+    res.body = '';
     
     var params = ['parp.php', uri.filename, '--dir=' + config.documentRoot];
     for (var param in req.uri.params)
@@ -149,49 +166,50 @@ http.createServer(function(req, res) {
       promise.addListener("output", function (data) {
         req.pause();
         if (data != null) {
-          body += data;
+          res.body += data;
         } else {
-          if (body.indexOf("<?xml") == 0)
-            content_type = "application/xml";
-          else
-            content_type = "text/html";
-          headers = [['Content-Type', content_type],
-                     ['Content-Length', body.length]];
-          sys.puts(req.requestLine + " (php) " + body.length);
-          callback((body.indexOf("404:") == 0) ? 404 : 200, 
-                   headers, body, encoding);
+          res.header("Content-Type", (res.body.indexOf("<?xml") == 0) ?
+                     "application/xml" : "text/html")
+          res.header("Content-Length", res.body.length);;
+          sys.puts(req.requestLine + " (php) " + res.body.length);
+          if (res.body.match(/^404:/)) 
+            res.status = 404;
+          res.respond();
         }
         setTimeout(function(){req.resume();});
       });
       promise.addListener("error", function(content) {
         if (content != null) {
           sys.puts("STDERR (php): " + content);
-          //callback(500, null, '500: Sombody said something shocking.');
+          //return res.respond('500: Sombody said something shocking.');
         }
       });
     });
     
   }
-
-  function respond(status, headers, body, encoding) {
-    sys.p(res);
-    res.sendHeader(status, headers);
-    res.sendBody(body, encoding || 'utf8');
-    res.finish();
-  }
   
   if (uri.ext == "php") {
-    respondWithPhp(respond);
+    respondWithPhp();
   } else if (uri.filename.substr(-7) == "-rpc.js") {
-    // TODO: need a better way to distinguish client & server js
-    var script = require("./" + uri.basename);
-    script.fetch(req, res, respond);
+    // TODO: use conf file to distinguish client & server js
+    try {
+      var script = require(config.documentRoot + uri.basename);
+      script.fetch(req, res);
+    } catch (e) {
+      res.status = 404
+      res.respond("404: In absentia. Or elsewhere.\n" +
+                  sys.inspect(e));
+    }
   } else if (uri.ext == "md") {
-    sys.exec("Markdown.pl < " + uri.filename).addCallback(function (out,err) {
-      respond(200, [], out);
+    sys.exec("Markdown.pl < " + config.documentRoot + uri.filename)
+    .addCallback(function (stdout, stderr) {
+      res.respond(stdout);})
+    .addErrback(function (code, stdout, stderr) {
+      res.status = 404;
+      res.respond("404: Mark my words. No such file.");
     });
   } else {
-    respondWithStatic(respond);
+    respondWithStatic();
   }
   
 }).listen(config.port);

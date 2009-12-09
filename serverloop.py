@@ -22,12 +22,13 @@ This is useful during editing and testing of the server."""
 
 import os, sys, time
 
-filenames = ["woses.js", ".woses-conf.js"]
+root = (sys.argv[1:] or ['.'])[0]
+filenames = ["woses.js", os.path.join(root, ".woses-conf.js")]
 
 def handler():
   print "\n\n"
   os.system("killall -v node");
-  os.spawnvp(os.P_NOWAIT, "node", ["node", "woses.js"] + sys.argv[1:])
+  os.spawnlp(os.P_NOWAIT, "node", "node", "woses.js", root);
 
 mtime = []
 while True:
