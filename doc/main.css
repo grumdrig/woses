@@ -2,6 +2,10 @@
   font-family: Helvetica;
 }
 
-.rigght { 
+.right { 
   float:right;
+}
+
+form, input { 
+  display: inline;
 }

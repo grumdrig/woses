@@ -47,7 +47,7 @@ for ($i = 2; $i < count($argv); ++$i) {
     if ($v[0] == "--dir")
       chdir($v[1]);
     else
-      $target[$v[0]] = $v[1];
+      $target[urldecode($v[0])] = urldecode($v[1]);
   }
 }
 

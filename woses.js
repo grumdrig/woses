@@ -97,8 +97,10 @@ http.createServer(function(req, res) {
     this.body = body || this.body || "";
     if (typeof this.body != 'string')
       this.body = JSON.encode(this.body);
+    var result = this.body ? this.body.length : 0;
     this.sendBody(this.body, this.encoding || 'utf8');
     this.finish();
+    return result;
   }
 
   res.header = function(header, value) {
@@ -141,12 +143,8 @@ http.createServer(function(req, res) {
   function respondWithPhp() {
     res.body = '';
     var params = ['parp.php', uri.filename, '--dir=' + config.documentRoot];
-    for (var param in req.uri.params)
-      params.push(param + "=" + req.uri.params[param]);
-
-    var form = wwwforms.decodeForm(req.body);
-    for (var param in form) 
-      params.push(param + "=" + form[param]);
+    for (var param in req.params)
+      params.push(escape(param) + "=" + escape(req.params[param]));
     params.push("-s");
     params.push("HTTP_USER_AGENT=" + req.headers['user-agent']);
     params.push("HTTP_HOST=" + req.headers['host']);
@@ -175,16 +173,29 @@ http.createServer(function(req, res) {
     });
   }
                   
-  function finishUp() {
+  req.params = req.uri.params;
+  req.body = '';
+  req.addListener('body', function(chunk) {
+    req.pause();
+    req.body += chunk;
+    setTimeout(function() { req.resume(); });
+  });
+  req.addListener('complete', function () {
+    if (req.headers['content-type'] == "application/x-www-form-urlencoded") {
+      var form = wwwforms.decodeForm(req.body);
+      for (var param in form) 
+        req.params[param] = form[param];
+    }
+      
     if (uri.ext == "php") {
       respondWithPhp();
     } else if (uri.filename.substr(-7) == "-rpc.js") {
       // TODO: use conf file to distinguish client & server js
       try {
         var script = require(config.documentRoot + uri.basename);
-        script.fetch(req, res);
-        sys.puts(req.requestLine + " " + res.body.length);
-        res.respond();
+        // TODO: don't have fetch call respond - just set body
+        var len = script.fetch(req, res);
+        sys.puts(req.requestLine + " " + len);
       } catch (e) {
         res.status = 404
         res.respond("404: In absentia. Or elsewhere.\n" +
@@ -201,20 +212,7 @@ http.createServer(function(req, res) {
     } else {
       respondWithStatic();
     }
-  }
-
-  var contentLength = parseInt(req.headers['content-length']);
-  if (contentLength) {
-    req.body = '';
-    req.addListener('body', function(chunk) {
-      req.pause();
-      req.body += chunk;
-      setTimeout(function() { req.resume(); });
-    });
-    req.addListener('complete', finishUp);
-  } else {
-    finishUp(); // Todo: does complete get called regardless?
-  }
+  });
 
 }).listen(config.port);
 

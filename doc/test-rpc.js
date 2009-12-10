@@ -4,4 +4,5 @@ exports.fetch = function (request, response) {
   response.header("content-type", "text/html");
   //sys.p(repsonse.headers);
   response.body = "Got it. <pre>" + sys.inspect(request.uri.params);
+  return response.respond();
 }
