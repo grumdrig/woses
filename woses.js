@@ -93,7 +93,6 @@ http.createServer(function(req, res) {
     req.uri.path = config.index;
   
   res.respond = function (body) {
-    sys.p(this);
     this.sendHeader(this.status || 200, this.headers);
     this.body = body || this.body || "";
     if (typeof this.body != 'string')
@@ -141,77 +140,82 @@ http.createServer(function(req, res) {
 
   function respondWithPhp() {
     res.body = '';
-    
     var params = ['parp.php', uri.filename, '--dir=' + config.documentRoot];
     for (var param in req.uri.params)
       params.push(param + "=" + req.uri.params[param]);
 
-    this.bytesTotal = req.headers['content-length'];
-    
+    var form = wwwforms.decodeForm(req.body);
+    for (var param in form) 
+      params.push(param + "=" + form[param]);
+    params.push("-s");
+    params.push("HTTP_USER_AGENT=" + req.headers['user-agent']);
+    params.push("HTTP_HOST=" + req.headers['host']);
+    params.push("REQUEST_URI=" + req.uri.full);
+    var promise = process.createChildProcess("php", params);
+    promise.addListener("output", function (data) {
+      req.pause();
+      if (data != null) {
+        res.body += data;
+      } else {
+        res.header("Content-Type", (res.body.indexOf("<?xml") == 0) ?
+                   "application/xml" : "text/html")
+        res.header("Content-Length", res.body.length);;
+        sys.puts(req.requestLine + " (php) " + res.body.length);
+        if (res.body.match(/^404:/)) 
+          res.status = 404;
+        res.respond();
+      }
+      setTimeout(function(){req.resume();});
+    });
+    promise.addListener("error", function(content) {
+      if (content != null) {
+        sys.puts("STDERR (php): " + content);
+        //return res.respond('500: Sombody said something shocking.');
+      }
+    });
+  }
+                  
+  function finishUp() {
+    if (uri.ext == "php") {
+      respondWithPhp();
+    } else if (uri.filename.substr(-7) == "-rpc.js") {
+      // TODO: use conf file to distinguish client & server js
+      try {
+        var script = require(config.documentRoot + uri.basename);
+        script.fetch(req, res);
+        sys.puts(req.requestLine + " " + res.body.length);
+        res.respond();
+      } catch (e) {
+        res.status = 404
+        res.respond("404: In absentia. Or elsewhere.\n" +
+                    sys.inspect(e));
+      }
+    } else if (uri.ext == "md") {
+      sys.exec("Markdown.pl < " + config.documentRoot + uri.filename)
+      .addCallback(function (stdout, stderr) {
+        res.respond(stdout);})
+      .addErrback(function (code, stdout, stderr) {
+        res.status = 404;
+        res.respond("404: Mark my words. No such file.");
+      });
+    } else {
+      respondWithStatic();
+    }
+  }
+
+  var contentLength = parseInt(req.headers['content-length']);
+  if (contentLength) {
     req.body = '';
     req.addListener('body', function(chunk) {
       req.pause();
       req.body += chunk;
       setTimeout(function() { req.resume(); });
     });
-    req.addListener('complete', function() {
-      var form = wwwforms.decodeForm(req.body);
-      for (var param in form) 
-        params.push(param + "=" + form[param]);
-      params.push("-s");
-      params.push("HTTP_USER_AGENT=" + req.headers['user-agent']);
-      params.push("HTTP_HOST=" + req.headers['host']);
-      params.push("REQUEST_URI=" + req.uri.full);
-      var promise = process.createChildProcess("php", params);
-      promise.addListener("output", function (data) {
-        req.pause();
-        if (data != null) {
-          res.body += data;
-        } else {
-          res.header("Content-Type", (res.body.indexOf("<?xml") == 0) ?
-                     "application/xml" : "text/html")
-          res.header("Content-Length", res.body.length);;
-          sys.puts(req.requestLine + " (php) " + res.body.length);
-          if (res.body.match(/^404:/)) 
-            res.status = 404;
-          res.respond();
-        }
-        setTimeout(function(){req.resume();});
-      });
-      promise.addListener("error", function(content) {
-        if (content != null) {
-          sys.puts("STDERR (php): " + content);
-          //return res.respond('500: Sombody said something shocking.');
-        }
-      });
-    });
-    
-  }
-  
-  if (uri.ext == "php") {
-    respondWithPhp();
-  } else if (uri.filename.substr(-7) == "-rpc.js") {
-    // TODO: use conf file to distinguish client & server js
-    try {
-      var script = require(config.documentRoot + uri.basename);
-      script.fetch(req, res);
-    } catch (e) {
-      res.status = 404
-      res.respond("404: In absentia. Or elsewhere.\n" +
-                  sys.inspect(e));
-    }
-  } else if (uri.ext == "md") {
-    sys.exec("Markdown.pl < " + config.documentRoot + uri.filename)
-    .addCallback(function (stdout, stderr) {
-      res.respond(stdout);})
-    .addErrback(function (code, stdout, stderr) {
-      res.status = 404;
-      res.respond("404: Mark my words. No such file.");
-    });
+    req.addListener('complete', finishUp);
   } else {
-    respondWithStatic();
+    finishUp(); // Todo: does complete get called regardless?
   }
-  
+
 }).listen(config.port);
 
 

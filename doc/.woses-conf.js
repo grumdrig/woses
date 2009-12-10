@@ -4,4 +4,4 @@ exports.mimetypes = {
 
 //exports.port = 8111;
 
-exports.logRequestHeaders = true;
+//exports.logRequestHeaders = true;
