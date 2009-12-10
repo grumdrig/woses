@@ -4,7 +4,7 @@
   <script src="script.js"></script>
 </head>
 
-<body onLoad="doSomething()">
+<body onLoad="unittest()">
 
 <h1> &#x2689; 
 <!--&#x2636; &#x2601; &#x2388; &#x100b7; &#x2603;-->
@@ -44,11 +44,15 @@ Woses
   <input type=submit>
 </form>
 &#x2689; 
-<button onclick="requestJson({a:5, b:10}, 'json-rpc.js')">Button?</button>
+<button onclick="requestJson({a:5, b:10}, 'json-rpc.js', function(r) {feedback(JSON.stringify(r))})">Button?</button>
 
 <p>
 
 Missing image: <img src=not-here.jpg>
+
+<br>
+<br>
+<br>
 
 <p id=something>Script should strike this out.</p>
 
