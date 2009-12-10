@@ -95,8 +95,10 @@ http.createServer(function(req, res) {
   res.respond = function (body) {
     this.sendHeader(this.status || 200, this.headers);
     this.body = body || this.body || "";
-    if (typeof this.body != 'string')
-      this.body = JSON.encode(this.body);
+    if (typeof this.body != 'string') {
+      this.header("content-type", "application/json");
+      this.body = JSON.stringify(this.body);
+    }
     var result = this.body ? this.body.length : 0;
     this.sendBody(this.body, this.encoding || 'utf8');
     this.finish();
@@ -181,14 +183,20 @@ http.createServer(function(req, res) {
     setTimeout(function() { req.resume(); });
   });
   req.addListener('complete', function () {
-    if (req.headers['content-type'] == "application/x-www-form-urlencoded") {
+    var ct = req.headers['content-type'];
+    if (ct) ct = ct.split(';')[0];
+    if (ct == "application/x-www-form-urlencoded") {
       var form = wwwforms.decodeForm(req.body);
       for (var param in form) 
         req.params[param] = form[param];
+    } else if (ct == "application/json") {
+      req.json = JSON.parse(req.body);
+      process.mixin(req.params, req.json);
     }
       
     if (uri.ext == "php") {
       respondWithPhp();
+
     } else if (uri.filename.substr(-7) == "-rpc.js") {
       // TODO: use conf file to distinguish client & server js
       try {
@@ -201,6 +209,7 @@ http.createServer(function(req, res) {
         res.respond("404: In absentia. Or elsewhere.\n" +
                     sys.inspect(e));
       }
+
     } else if (uri.ext == "md") {
       sys.exec("Markdown.pl < " + config.documentRoot + uri.filename)
       .addCallback(function (stdout, stderr) {
@@ -209,6 +218,7 @@ http.createServer(function(req, res) {
         res.status = 404;
         res.respond("404: Mark my words. No such file.");
       });
+
     } else {
       respondWithStatic();
     }
