@@ -57,6 +57,8 @@ var config = {
   validate: function () {
     if (this.index.substr(0,1) != '/')
       this.index = '/' + this.index;
+    if (this.documentRoot.substr(0,1) != '.')
+      this.documentRoot = './' + this.documentRoot;
     if (this.documentRoot.substr(-1) != '/')
       this.documentRoot += "/";
   }
@@ -79,7 +81,11 @@ try {
 } catch (e) {
   // No config file is OK
 }
-  
+
+
+//process.chdir(config.documentRoot);  
+//config.documentRoot = "./";
+
 
 http.createServer(function(req, res) {
 
@@ -100,7 +106,11 @@ http.createServer(function(req, res) {
       this.body = JSON.stringify(this.body);
     }
     var result = this.body ? this.body.length : 0;
-    this.sendBody(this.body, this.encoding || 'utf8');
+    this.encoding = this.encoding || 'utf8';
+    res.header('Content-Length', (this.encoding === 'utf8' ? 
+                       encodeURIComponent(this.body).replace(/%../g, 'x').length : 
+                                  this.body.length));
+    this.sendBody(this.body, this.encoding);
     this.finish();
     return result;
   }
@@ -128,9 +138,6 @@ http.createServer(function(req, res) {
     var promise = posix.cat(config.documentRoot + uri.filename, res.encoding);
     promise.addCallback(function(data) {
       res.header('Content-Type', content_type);
-      res.header('Content-Length', res.encoding === 'utf8' ? 
-                 encodeURIComponent(data).replace(/%../g, 'x').length : 
-                 data.length);
       sys.puts(req.requestLine + " " + data.length);
       res.respond(data);
     });
@@ -159,7 +166,6 @@ http.createServer(function(req, res) {
       } else {
         res.header("Content-Type", (res.body.indexOf("<?xml") == 0) ?
                    "application/xml" : "text/html")
-        res.header("Content-Length", res.body.length);;
         sys.puts(req.requestLine + " (php) " + res.body.length);
         if (res.body.match(/^404:/)) 
           res.status = 404;
@@ -200,6 +206,7 @@ http.createServer(function(req, res) {
     } else if (uri.filename.substr(-7) == "-rpc.js") {
       // TODO: use conf file to distinguish client & server js
       try {
+        sys.p(config.documentRoot + uri.basename);
         var script = require(config.documentRoot + uri.basename);
         // TODO: don't have fetch call respond - just set body
         var len = script.fetch(req, res);
@@ -229,4 +236,4 @@ http.createServer(function(req, res) {
 
 sys.puts('Woses running at http://127.0.0.1:' + 
          config.port + '/ in ' + 
-         config.documentRoot);
+         process.cwd());

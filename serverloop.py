@@ -20,25 +20,44 @@ Whenever it changes, kill and restart. (See http://nodejs.org/)
 This is useful during editing and testing of the server."""
 
 
-import os, sys, time
+import os, sys, time, signal
 
 root = (sys.argv[1:] or ['.'])[0]
-filenames = ["woses.js", os.path.join(root, ".woses-conf.js")]
+filenames = ["woses.js"];
+conf = os.path.join(root, ".woses-conf.js");
+if os.path.exists(conf): filenames.append(conf);
 
-def handler():
-  print "\n\n"
-  os.system("killall -v node");
-  os.spawnlp(os.P_NOWAIT, "node", "node", "woses.js", root);
+def restart(pid):
+  if pid:
+    os.kill(pid, signal.SIGTERM)
+  pid = os.spawnlp(os.P_NOWAIT, "node", "node", "woses.js", root);
+  print "Started", pid
+  return pid
 
+os.system("killall -v node");
+
+pid = None
 mtime = []
 while True:
   m = [os.stat(filename).st_mtime for filename in filenames]
   if mtime != m:
-    handler()
+    pid = restart(pid)
     mtime = m
+  else:
+    try:
+      os.kill(pid, 0)
+    except:
+      pid = restart(pid)
+    
   try:
     time.sleep(1)
   except KeyboardInterrupt:
-    print 
-    os.system("killall -v node")
-    break
+    print "\nKilling", pid, "^C again to quit"
+    if pid:
+      os.kill(pid, signal.SIGTERM)
+      pid = None
+    try:
+      time.sleep(1)
+    except KeyboardInterrupt:
+      print
+      break
