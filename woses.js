@@ -42,7 +42,6 @@ function parseUri(path) {
 
 var config = {
   port: 8080,
-  documentRoot: "./",
   index: "index.html",
   mimetypes: {
     "css" : "text/css",
@@ -53,25 +52,17 @@ var config = {
     "png" : "image/png",
     "xml" : "application/xml",
     "xul" : "application/vnd.mozilla.xul+xml",
-  },
-  validate: function () {
-    if (this.index.substr(0,1) != '/')
-      this.index = '/' + this.index;
-    if (this.documentRoot.substr(0,1) != '.')
-      this.documentRoot = './' + this.documentRoot;
-    if (this.documentRoot.substr(-1) != '/')
-      this.documentRoot += "/";
   }
 }
 
-if (process.ARGV.length > 2) {
-  config.documentRoot = process.ARGV[2];
-  config.validate();
-}
 
-var confFile = config.documentRoot + ".woses-conf.js";
+if (process.ARGV.length > 2)
+  process.chdir(process.ARGV[2]);
+
+require.paths.push(process.cwd());
+
 try {
-  var cf = require(config.documentRoot + ".woses-conf");
+  var cf = require(".woses-conf");
   if (cf.mimetypes) {
     process.mixin(config.mimetypes, cf.mimetypes);
     delete cf.mimetypes;
@@ -83,10 +74,6 @@ try {
 }
 
 
-//process.chdir(config.documentRoot);  
-//config.documentRoot = "./";
-
-
 http.createServer(function(req, res) {
 
   req.requestLine = req.method + " " + req.uri.full + 
@@ -96,7 +83,7 @@ http.createServer(function(req, res) {
     sys.p(req.headers);
 
   if (req.uri.path == '/')
-    req.uri.path = config.index;
+    req.uri.path = "/" + config.index;
   
   res.respond = function (body) {
     this.sendHeader(this.status || 200, this.headers);
@@ -135,7 +122,7 @@ http.createServer(function(req, res) {
   function respondWithStatic() {
     var content_type = config.mimetypes[uri.ext] || "text/plain";
     res.encoding = (content_type.slice(0,4) === 'text' ? 'utf8' : 'binary');
-    var promise = posix.cat(config.documentRoot + uri.filename, res.encoding);
+    var promise = posix.cat(uri.filename, res.encoding);
     promise.addCallback(function(data) {
       res.header('Content-Type', content_type);
       sys.puts(req.requestLine + " " + data.length);
@@ -151,7 +138,8 @@ http.createServer(function(req, res) {
 
   function respondWithPhp() {
     res.body = '';
-    var params = ['parp.php', uri.filename, '--dir=' + config.documentRoot];
+    var parp = __filename.split('/').slice(0,-1).concat("parp.php").join("/");
+    var params = [parp, uri.filename];
     for (var param in req.params)
       params.push(escape(param) + "=" + escape(req.params[param]));
     params.push("-s");
@@ -206,8 +194,7 @@ http.createServer(function(req, res) {
     } else if (uri.filename.substr(-7) == "-rpc.js") {
       // TODO: use conf file to distinguish client & server js
       try {
-        sys.p(config.documentRoot + uri.basename);
-        var script = require(config.documentRoot + uri.basename);
+        var script = require(uri.basename);
         // TODO: don't have fetch call respond - just set body
         var len = script.fetch(req, res);
         sys.puts(req.requestLine + " " + len);
@@ -218,7 +205,7 @@ http.createServer(function(req, res) {
       }
 
     } else if (uri.ext == "md") {
-      sys.exec("Markdown.pl < " + config.documentRoot + uri.filename)
+      sys.exec("Markdown.pl < " + uri.filename)
       .addCallback(function (stdout, stderr) {
         res.respond(stdout);})
       .addErrback(function (code, stdout, stderr) {
