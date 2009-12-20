@@ -62,6 +62,12 @@ if (process.ARGV.length > 2)
 require.paths.push(process.cwd());
 
 try {
+  posix.stat(config.index).wait();
+} catch (e) {
+  config.index = "index.php"
+}
+
+try {
   var cf = require(".woses-conf");
   if (cf.mimetypes) {
     process.mixin(config.mimetypes, cf.mimetypes);

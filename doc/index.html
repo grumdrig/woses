@@ -6,12 +6,91 @@
 
 <body onLoad="unittest()">
 
-<h1> &#x2689; 
+<h1>
 <!--&#x2636; &#x2601; &#x2388; &#x100b7; &#x2603;-->
-Woses 
+Woses <span class=right style=color:black>&#x2689;</span>
+</h1>
+
+<p>
+Woses is a <a href=http://nodejs.org/>Node</a>-based webserver with
+support for <a href=http://php.net/>PHP</a> templating.
+
+<p>
+Additionally it includes a mechanism for server-side JavaScript RPC.
+
+<p>
+The home page for Woses is
+<a href=http://grumdrig.com/woses/>http://grumdrig.com/woses/</a>. The
+code lives at
+<a href=http://bitbucket.com/grumdrig/woses>http://bitbucket.com/grumdrig/woses</a>.
+
+<h2>Usage</h2>
+
+<pre>
+$ node woses.js DOCUMENT_ROOT
+</pre>
+
+will run the HTTP server against the content in DOCUMENT_ROOT. For example, 
+
+<pre>
+$ node woses.js doc
+</pre>
+
+<p>
+will serve this documentation on <a href=http://localhost:8080/>port
+8080</a>.
+
+<h2> Configuration </h2>
+<p>
+Woses can be configured by placing a file
+called <code>.woses-conf.js</code> in the document root. This file may
+export the following settings:
+
+<ul>
+<li> <code>port</code>: A port other than the default 8080 on which to
+   serve.
+<li> <code>index</code>: Name of a directory index page to use for
+  URI's which point to a folder, rather than the
+  default, <code>index.html</code> falling back
+  to <code>index.php</code>.
+<li> <code>mimetypes</code>: A map from file extensions to MIME types
+  for serving content.
+</ul>
+
+Here is an example configuration file:
+
+<pre>
+exports.port = 80;
+exports.index = "home.html";
+exports.mimetypes = {
+  'gif':  'image/gif',
+  'readme': 'text/plain'
+}
+</pre>
+
+<h2> PHP </h2>
+
+<p>
+Woses will serve PHP scripts through the mechanism of the PHP
+command-line interface; thus the <code>php</code> command must be available for
+woses to serve PHP scripts.
+
+<p>
+The big caveat of PHP support is that, within PHP code, calls to
+`header()' have no effect.
+
+<h2> JS RPC </h2>
+
+Javascript modules.
+
+<h2> JS Templating </h2>
+
+<h2> Security </h2>
+
+<h2> Tests </h2>
+
 <img class=right src=wose.png> 
 <img class=right src=sceltictree.jpg> 
-</h1>
 
 <p>
 
