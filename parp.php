@@ -26,8 +26,6 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 //   --dir=DIR  Change directory to specified document root DIR  
 
 
-//fputs(STDERR, var_export($argv, TRUE));
-
 session_start();
 
 $_SESSION['nickname'] = 'Nicholas'; // TODO:
