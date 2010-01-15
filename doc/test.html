@@ -1,0 +1,58 @@
+<head>
+  <title>Woses Test Page</title>
+  <link rel="stylesheet" href="style.css"/>
+  <script src="script.js"></script>
+</head>
+
+<body onLoad="unittest()">
+
+
+<h1>Woses</h1>
+
+<h2>Test Page</h2>
+
+<img class=right src=wose.png> 
+<img class=right src=sceltictree.jpg> 
+
+<p>
+
+<a href=index.html>HTML</a>
+&#x2689; 
+<a href=not-here.html>404</a>
+
+<p>
+
+<a href=README.md>Markdown README</a>
+&#x2689; 
+<a href=not-here.md>404</a>
+
+<form action=test.php method=post>
+<a href=test.php?one=param&two=potato>Test PHP</a>
+&#x2689; 
+<a href=not-here.php>404</a>
+&#x2689; 
+  <input type=text name=box value=text>
+  <input type=submit>
+</form>
+
+<p>
+<form action=test-rpc.js method=post>
+<a href="test-rpc.js?this=that">Test JS RPC</a>
+&#x2689; 
+<a href=not-here-rpc.js>404</a>
+&#x2689; 
+  <input type=text name=boxy value=words>
+  <input type=submit>
+</form>
+&#x2689; 
+<button onclick="requestJson({a:5, b:10}, 'json-rpc.js', function(r) {feedback(JSON.stringify(r))})">Button?</button>
+
+<p>
+
+Missing image: <img src=not-here.jpg>
+
+<br>
+<br>
+<br>
+
+<p id=something>Test results:</p>
