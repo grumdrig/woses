@@ -24,8 +24,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 var 
   sys   = require('sys'),
   posix = require('posix'),
-  http  = require('http'),
-  wwwforms  = require('./www-forms');
+  http  = require('http');
 
 
 function parseUri(path) {
@@ -142,6 +141,16 @@ http.createServer(function(req, res) {
     });
   }
 
+  function decodeForm(data) {
+    var result = {};
+    data
+    .split("&")
+    .map(function (assignment) { return assignment.split("=").map(
+      function (tok) { return decodeURIComponent(tok.replace(/\+/g, " "));})})
+    .forEach(function(pair) { result[pair[0]] = pair[1]; });
+    return result;
+  }
+
   function respondWithPhp() {
     res.body = '';
     var parp = __filename.split('/').slice(0,-1).concat("parp.php").join("/");
@@ -186,7 +195,7 @@ http.createServer(function(req, res) {
     var ct = req.headers['content-type'];
     if (ct) ct = ct.split(';')[0];
     if (ct == "application/x-www-form-urlencoded") {
-      var form = wwwforms.decodeForm(req.body);
+      var form = decodeForm(req.body);
       for (var param in form) 
         req.params[param] = form[param];
     } else if (ct == "application/json") {
