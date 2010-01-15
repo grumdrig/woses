@@ -23,7 +23,7 @@ This is useful during editing and testing of the server."""
 import os, sys, time, signal
 
 root = (sys.argv[1:] or ['.'])[0]
-filenames = ["woses.js"];
+filenames = ["woses.js"] + sys.argv[2:];
 conf = os.path.join(root, ".woses-conf.js");
 if os.path.exists(conf): filenames.append(conf);
 

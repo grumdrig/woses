@@ -21,7 +21,7 @@ Additionally it includes a mechanism for server-side JavaScript RPC.
 The home page for Woses is
 <a href=http://grumdrig.com/woses/>http://grumdrig.com/woses/</a>. The
 code lives at
-<a href=http://bitbucket.com/grumdrig/woses>http://bitbucket.com/grumdrig/woses</a>.
+<a href=http://github.com/grumdrig/woses>http://github.com/grumdrig/woses</a>.
 
 <h2>Usage</h2>
 
@@ -38,6 +38,17 @@ $ node woses.js doc
 <p>
 will serve this documentation on <a href=http://localhost:8080/>port
 8080</a>.
+
+<p>
+Included also is the script <code>serverloop.py</code> which runs the
+server in a loop, polling for changes to the configuration
+file, <code>woses.js</code>, or files listed on the command line.
+Changes or <code>^C</code> restart the server. This is most useful for
+running the server during development. Usage is:
+
+<pre>
+$ ./serverloop.py DOCUMENT_ROOT [OTHER_FILES...]
+</pre>
 
 <h2> Configuration </h2>
 <p>
@@ -80,11 +91,32 @@ The big caveat of PHP support is that, within PHP code, calls to
 
 <h2> JS RPC </h2>
 
-Javascript modules.
+<p>
+Requests for filenames ending in <code>-rpc.js</code> (some more
+sensible mechanism to distinguish is a TODO item) are loaded as
+modules and the HTTP request is proxied through their
+exported <code>fetch</code> function, with signature:
+
+<pre>
+exports.fetch = function(request, response) {
+  // ...
+  response.body = ...; 
+  return response.respond();
+};
+</pre>
 
 <h2> JS Templating </h2>
 
+<p>
+Templating in the style of EJS / Resig's micro-templating is planned,
+but not implemented
+
 <h2> Security </h2>
+
+<p>
+URLs with ".." in them are disallowed, but security is probably poor
+at the moment. That is, an attacker may be able to pwn your system if
+you are running this on a public server.
 
 <h2> Tests </h2>
 
