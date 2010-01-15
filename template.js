@@ -1,41 +1,33 @@
-/* 
-This is resig's templating function, here for reference:
-
+// Templates with embedded JavaScript
+//
+// Some credit is due to John Resig:
 // http://ejohn.org/blog/javascript-micro-templating/
-
-(function(){
-  var cache = {};
-  
-  this.tmpl = function tmpl(str, data){
-    // Figure out if we're getting a template, or if we need to
-    // load the template - and be sure to cache the result.
-    var fn = cache[str] = cache[str] ||
-      
-    // Generate a reusable function that will serve as a template
-    // generator (and which will be cached).
-    new Function("obj",
-                 "var p=[],print=function(){p.push.apply(p,arguments);};" +
-                 
-                 // Introduce the data as local variables using with(){}
-                 "with(obj){p.push('" +
-                 // Convert the template into JS
-                 str.replace(/[\r\t\n]/g, " ")
-                    .split("<%").join("\t")
-                    .replace(/((^|%>)[^\t]*)'/g, "$1\r")
-                    .replace(/\t=(.*?)%>/g, "',$1,'")
-                    .split("\t").join("');")
-                    .split("%>").join("p.push('")
-                    .split("\r").join("\\'") +
-                 "');}return p.join('');");
-    
-    // Provide some basic currying
-    return data ? fn(data) : fn;
-  };
-})();
-*/
+// and the templating follows that syntax and that of EJS:
+// http://embeddedjs.com/
+// Unlike the former, however, this implementation preserved newlines, etc.
+//
+// The template syntax is literal text, in which may be embedded:
+// - Arbitrary code sections between <% ... %> tags, and
+// - Evaluated expressions between <%= ... %> tags.
+// The code sections may use `print(x)` to add output as well/
+//
+// Example template:
+//
+// <ul class="<%= className %>"> <% for (var i=0; item[i]; ++i) { %>
+//     <li> <% print(item[i]); 
+//   } %> 
+// </ul>
+//
+// would produce, with data { className:"bold", item:["One", "Two"]} :
+//
+// <ul class="bold"> 
+//   <li> One 
+//   <li> Two 
+// </ul>
+//
 
 
-function compile(template, data) {
+var template = exports.template = function(template, data) {
   // TODO cache
   var body = [
     "var $$p = [];",
@@ -66,8 +58,17 @@ function compile(template, data) {
 
 function test() {
   var sys = require("sys");
+
+  var t0 = template(
+    '<ul class="<%= className %>"> \n' +
+    '  <% for (var i=0; item[i]; ++i) { %> \n' +
+    '     <li> <% print(item[i]); \n' +
+    '  } %> \n' + 
+    '</ul>');
+
+  sys.print(t0({ className:"bold", item:["One", "Two"]}));
   
-  var t1 = compile(
+  var t1 = template(
     '<script type="text/html" id="item_tmpl">\n'+
     '  <div id="<%=id%>" class="<%=(i % 2 == 1 ? " even" : "")%>">\n'+
     '    <div class="grid_1 alpha right">\n'+
@@ -83,7 +84,7 @@ function test() {
   sys.print('\n\n');
   sys.print(t1({id:"IDENTIFIER", i:5, profile_image_url:"URL", from_user:"USER", text:"TEXT"}));
   
-  var t2 = compile(
+  var t2 = template(
     '<script type="text/html" id="user_tmpl">\n'+
     '  <% for ( var i = 0; i < users.length; i++ ) { %>\n'+
     '    <li><a href="<%=users[i].url%>"><%=users[i].name%></a></li>\n'+
