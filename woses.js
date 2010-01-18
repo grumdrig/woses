@@ -183,6 +183,31 @@ http.createServer(function(req, res) {
       }
     });
   }
+
+
+  function respondWithJsRpc() {
+    // TODO: use conf file to distinguish client & server js
+    try {
+      var script = require(uri.basename);
+      // TODO: don't have fetch call respond - just set body
+      var len = script.fetch(req, res);
+      sys.puts(req.requestLine + " " + len);
+    } catch (e) {
+      res.status = 404
+      res.respond("404: In absentia. Or elsewhere.\n" +
+                  sys.inspect(e));
+    }
+  }
+
+  function respondWithMarkdown() {
+    sys.exec("Markdown.pl < " + uri.filename)
+    .addCallback(function (stdout, stderr) {
+      res.respond(stdout);})
+    .addErrback(function (code, stdout, stderr) {
+      res.status = 404;
+      res.respond("404: Mark my words. No such file.");
+    });
+  }
                   
   req.params = req.uri.params;
   req.body = '';
@@ -202,34 +227,20 @@ http.createServer(function(req, res) {
       req.json = JSON.parse(req.body);
       process.mixin(req.params, req.json);
     }
+
+    handlers = [
+      [/\.php$/, respondWithPhp],
+      [/-rpc\.js$/, respondWithJsRpc],
+      [/\.md$/, respondWithMarkdown],
+      [/$/, respondWithStatic]
+    ];
       
-    if (uri.ext == "php") {
-      respondWithPhp();
 
-    } else if (uri.filename.substr(-7) == "-rpc.js") {
-      // TODO: use conf file to distinguish client & server js
-      try {
-        var script = require(uri.basename);
-        // TODO: don't have fetch call respond - just set body
-        var len = script.fetch(req, res);
-        sys.puts(req.requestLine + " " + len);
-      } catch (e) {
-        res.status = 404
-        res.respond("404: In absentia. Or elsewhere.\n" +
-                    sys.inspect(e));
+    for (var i = 0; handlers[i]; ++i) {
+      if (handlers[i][0](req.uri.path)) {
+        handlers[i][1]();
+        break;
       }
-
-    } else if (uri.ext == "md") {
-      sys.exec("Markdown.pl < " + uri.filename)
-      .addCallback(function (stdout, stderr) {
-        res.respond(stdout);})
-      .addErrback(function (code, stdout, stderr) {
-        res.status = 404;
-        res.respond("404: Mark my words. No such file.");
-      });
-
-    } else {
-      respondWithStatic();
     }
   });
 
