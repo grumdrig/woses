@@ -27,15 +27,81 @@ var
   http  = require('http');
 
 
-function parseUri(path) {
-  var parts = RegExp("^/((.+?)(\\.([a-z]+))?)$")(path);
-  if (parts) {
-    return {
-      filename: parts[1],
-      basename: parts[2],
-      ext: parts[4]
-    };
+function respondWithPhp(req, res) {
+  res.body = '';
+  var parp = __filename.split('/').slice(0,-1).concat("parp.php").join("/");
+  var params = [parp, req.uri.filename];
+  for (var param in req.params)
+    params.push(escape(param) + "=" + escape(req.params[param]));
+  params.push("-s");
+  params.push("HTTP_USER_AGENT=" + req.headers['user-agent']);
+  params.push("HTTP_HOST=" + req.headers['host']);
+  params.push("REQUEST_URI=" + req.uri.full);
+  var promise = process.createChildProcess("php", params);
+  promise.addListener("output", function (data) {
+    req.pause();
+    if (data != null) {
+      res.body += data;
+    } else {
+      res.header("Content-Type", (res.body.indexOf("<?xml") == 0) ?
+                 "application/xml" : "text/html")
+      sys.puts(req.requestLine + " (php) " + res.body.length);
+      if (res.body.match(/^404:/)) 
+        res.status = 404;
+      res.respond();
+    }
+    setTimeout(function(){req.resume();});
+  });
+  promise.addListener("error", function(content) {
+    if (content != null) {
+      sys.puts("STDERR (php): " + content);
+      //return res.respond('500: Sombody said something shocking.');
+    }
+  });
+}
+
+
+function respondWithJsRpc(req, res) {
+  // TODO: use conf file to distinguish client & server js
+  try {
+    var script = require(req.uri.basename);
+    // TODO: don't have fetch call respond - just set body
+    var len = script.fetch(req, res);
+    sys.puts(req.requestLine + " " + len);
+  } catch (e) {
+    res.status = 404
+    res.respond("404: In absentia. Or elsewhere.\n" +
+                sys.inspect(e));
   }
+}
+
+
+function respondWithMarkdown(req, res) {
+  sys.exec("Markdown.pl < " + req.uri.filename)
+  .addCallback(function (stdout, stderr) {
+    res.respond(stdout);})
+  .addErrback(function (code, stdout, stderr) {
+    res.status = 404;
+    res.respond("404: Mark my words. No such file.");
+  });
+}
+
+
+function respondWithStatic(req, res) {
+  var content_type = config.mimetypes[req.uri.ext] || "text/plain";
+  res.encoding = (content_type.slice(0,4) === 'text' ? 'utf8' : 'binary');
+  var promise = posix.cat(req.uri.filename, res.encoding);
+  promise.addCallback(function(data) {
+    res.header('Content-Type', content_type);
+    sys.puts(req.requestLine + " " + data.length);
+    res.respond(data);
+  });
+  promise.addErrback(function() {
+    sys.puts("Error 404: " + req.uri.filename);
+    res.status = 404;
+    res.header('Content-Type', 'text/plain');
+    res.respond('404: I looked but did not find.');
+  });
 }
 
 
@@ -51,7 +117,13 @@ var config = {
     "png" : "image/png",
     "xml" : "application/xml",
     "xul" : "application/vnd.mozilla.xul+xml",
-  }
+  },
+  handlers: [
+    [/\.php$/, respondWithPhp],
+    [/-rpc\.js$/, respondWithJsRpc],
+    [/\.md$/, respondWithMarkdown],
+    [/$/, respondWithStatic]
+  ]
 }
 
 
@@ -71,6 +143,10 @@ try {
   if (cf.mimetypes) {
     process.mixin(config.mimetypes, cf.mimetypes);
     delete cf.mimetypes;
+  }
+  if (cf.handlers) {
+    config.handlers = cf.handlers.concat(config.handlers);
+    delete cf.handlers;
   }
   process.mixin(config, cf);
   config.validate();
@@ -112,33 +188,21 @@ http.createServer(function(req, res) {
     this.headers.push([header, value]);
   }
 
-  var uri = parseUri(req.uri.path);
-  if (!uri) {
+  var uriparts = RegExp("^/((.+?)(\\.([a-z]+))?)$")(req.uri.path);
+  if (!uriparts) {
     res.status = 400;
     return res.respond("400: I have no idea what that is");
   }
+  process.mixin(req.uri, {
+    filename: uriparts[1],
+    basename: uriparts[2],
+    ext: uriparts[4]
+  });
 
   // Exclude ".." in uri
-  if (req.uri.path.indexOf('..') >= 0 || uri.filename.substr(1) == ".") {
+  if (req.uri.path.indexOf('..') >= 0 || req.uri.filename.substr(1) == ".") {
     res.status = 403;
     return res.respond("403: Don't hack me, bro");
-  }
-
-  function respondWithStatic() {
-    var content_type = config.mimetypes[uri.ext] || "text/plain";
-    res.encoding = (content_type.slice(0,4) === 'text' ? 'utf8' : 'binary');
-    var promise = posix.cat(uri.filename, res.encoding);
-    promise.addCallback(function(data) {
-      res.header('Content-Type', content_type);
-      sys.puts(req.requestLine + " " + data.length);
-      res.respond(data);
-    });
-    promise.addErrback(function() {
-      sys.puts("Error 404: " + uri.filename);
-      res.status = 404;
-      res.header('Content-Type', 'text/plain');
-      res.respond('404: I looked but did not find.');
-    });
   }
 
   function decodeForm(data) {
@@ -151,64 +215,6 @@ http.createServer(function(req, res) {
     return result;
   }
 
-  function respondWithPhp() {
-    res.body = '';
-    var parp = __filename.split('/').slice(0,-1).concat("parp.php").join("/");
-    var params = [parp, uri.filename];
-    for (var param in req.params)
-      params.push(escape(param) + "=" + escape(req.params[param]));
-    params.push("-s");
-    params.push("HTTP_USER_AGENT=" + req.headers['user-agent']);
-    params.push("HTTP_HOST=" + req.headers['host']);
-    params.push("REQUEST_URI=" + req.uri.full);
-    var promise = process.createChildProcess("php", params);
-    promise.addListener("output", function (data) {
-      req.pause();
-      if (data != null) {
-        res.body += data;
-      } else {
-        res.header("Content-Type", (res.body.indexOf("<?xml") == 0) ?
-                   "application/xml" : "text/html")
-        sys.puts(req.requestLine + " (php) " + res.body.length);
-        if (res.body.match(/^404:/)) 
-          res.status = 404;
-        res.respond();
-      }
-      setTimeout(function(){req.resume();});
-    });
-    promise.addListener("error", function(content) {
-      if (content != null) {
-        sys.puts("STDERR (php): " + content);
-        //return res.respond('500: Sombody said something shocking.');
-      }
-    });
-  }
-
-
-  function respondWithJsRpc() {
-    // TODO: use conf file to distinguish client & server js
-    try {
-      var script = require(uri.basename);
-      // TODO: don't have fetch call respond - just set body
-      var len = script.fetch(req, res);
-      sys.puts(req.requestLine + " " + len);
-    } catch (e) {
-      res.status = 404
-      res.respond("404: In absentia. Or elsewhere.\n" +
-                  sys.inspect(e));
-    }
-  }
-
-  function respondWithMarkdown() {
-    sys.exec("Markdown.pl < " + uri.filename)
-    .addCallback(function (stdout, stderr) {
-      res.respond(stdout);})
-    .addErrback(function (code, stdout, stderr) {
-      res.status = 404;
-      res.respond("404: Mark my words. No such file.");
-    });
-  }
-                  
   req.params = req.uri.params;
   req.body = '';
   req.addListener('body', function(chunk) {
@@ -228,17 +234,9 @@ http.createServer(function(req, res) {
       process.mixin(req.params, req.json);
     }
 
-    handlers = [
-      [/\.php$/, respondWithPhp],
-      [/-rpc\.js$/, respondWithJsRpc],
-      [/\.md$/, respondWithMarkdown],
-      [/$/, respondWithStatic]
-    ];
-      
-
-    for (var i = 0; handlers[i]; ++i) {
-      if (handlers[i][0](req.uri.path)) {
-        handlers[i][1]();
+    for (var i = 0; config.handlers[i]; ++i) {
+      if (config.handlers[i][0](req.uri.path)) {
+        config.handlers[i][1](req, res);
         break;
       }
     }
