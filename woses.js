@@ -223,7 +223,9 @@ http.createServer(function(req, res) {
     }
 
     for (var i = 0; config.handlers[i]; ++i) {
-      if (config.handlers[i][0](req.uri.path)) {
+      var match = config.handlers[i][0](req.uri.path);
+      if (match) {
+        req.uri.match = match;
         config.handlers[i][1](req, res);
         break;
       }
