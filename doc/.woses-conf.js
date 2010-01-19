@@ -9,7 +9,7 @@ exports.port = 8080;
 //exports.logRequestHeaders = true;
 
 function respondWithMarkdown(req, res) {
-  sys.exec("Markdown.pl < " + req.uri.filename)
+  sys.exec("Markdown.pl < " + req.filename)
   .addCallback(function (stdout, stderr) {
     res.respond(stdout);})
   .addErrback(function (code, stdout, stderr) {

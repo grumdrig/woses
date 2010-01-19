@@ -24,19 +24,20 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 var 
   sys   = require('sys'),
   posix = require('posix'),
-  http  = require('http');
+  http  = require('http'),
+  url   = require('url');
 
 
 function respondWithPhp(req, res) {
   res.body = '';
   var parp = __filename.split('/').slice(0,-1).concat("parp.php").join("/");
-  var params = [parp, req.uri.filename];
+  var params = [parp, req.filename];
   for (var param in req.params)
     params.push(escape(param) + "=" + escape(req.params[param]));
   params.push("-s");
   params.push("HTTP_USER_AGENT=" + req.headers['user-agent']);
   params.push("HTTP_HOST=" + req.headers['host']);
-  params.push("REQUEST_URI=" + req.uri.full);
+  params.push("REQUEST_URI=" + req.url);
   var promise = process.createChildProcess("php", params);
   promise.addListener("output", function (data) {
     req.pause();
@@ -64,7 +65,7 @@ function respondWithPhp(req, res) {
 function respondWithJsRpc(req, res) {
   // TODO: use conf file to distinguish client & server js
   try {
-    var script = require(req.uri.basename);
+    var script = require(req.basename);
     // TODO: don't have fetch call respond - just set body
     var len = script.fetch(req, res);
     sys.puts(req.requestLine + " " + len);
@@ -77,16 +78,16 @@ function respondWithJsRpc(req, res) {
 
 
 function respondWithStatic(req, res) {
-  var content_type = config.mimetypes[req.uri.ext] || "text/plain";
+  var content_type = config.mimetypes[req.ext] || "text/plain";
   res.encoding = (content_type.slice(0,4) === 'text' ? 'utf8' : 'binary');
-  var promise = posix.cat(req.uri.filename, res.encoding);
+  var promise = posix.cat(req.filename, res.encoding);
   promise.addCallback(function(data) {
     res.header('Content-Type', content_type);
     sys.puts(req.requestLine + " " + data.length);
     res.respond(data);
   });
-  promise.addErrback(function() {
-    sys.puts("Error 404: " + req.uri.filename);
+  promise.addErrback(function(data) {
+    sys.puts("Error 404: " + req.filename);
     res.status = 404;
     res.header('Content-Type', 'text/plain');
     res.respond('404: I looked but did not find.');
@@ -145,14 +146,13 @@ try {
 
 http.createServer(function(req, res) {
 
-  req.requestLine = req.method + " " + req.uri.full + 
-    " HTTP/" + req.httpVersion;
+  req.requestLine = req.method + " " + req.url +  " HTTP/" + req.httpVersion;
 
   if (config.logRequestHeaders)
     sys.p(req.headers);
 
-  if (req.uri.path == '/')
-    req.uri.path = "/" + config.index;
+  if (req.url == '/')
+    req.url = "/" + config.index;
   
   res.respond = function (body) {
     this.sendHeader(this.status || 200, this.headers);
@@ -176,19 +176,19 @@ http.createServer(function(req, res) {
     this.headers.push([header, value]);
   }
 
-  var uriparts = RegExp("^/((.+?)(\\.([a-z]+))?)$")(req.uri.path);
+  req.query = req.query || {};
+  process.mixin(req, url.parse(req.url, true));
+  var uriparts = RegExp("^/((.+?)(\\.([a-z]+))?)$")(req.pathname);
   if (!uriparts) {
     res.status = 400;
     return res.respond("400: I have no idea what that is");
   }
-  process.mixin(req.uri, {
-    filename: uriparts[1],
-    basename: uriparts[2],
-    ext: uriparts[4]
-  });
+  req.filename = uriparts[1];
+  req.basename = uriparts[2];
+  req.ext = uriparts[4];
 
   // Exclude ".." in uri
-  if (req.uri.path.indexOf('..') >= 0 || req.uri.filename.substr(1) == ".") {
+  if (req.pathname.indexOf('..') >= 0 || req.filename.substr(0,1) == ".") {
     res.status = 403;
     return res.respond("403: Don't hack me, bro");
   }
@@ -203,7 +203,7 @@ http.createServer(function(req, res) {
     return result;
   }
 
-  req.params = req.uri.params;
+  req.params = req.query;  // TODO: get rid of this redundancy
   req.body = '';
   req.addListener('body', function(chunk) {
     req.pause();
@@ -223,9 +223,9 @@ http.createServer(function(req, res) {
     }
 
     for (var i = 0; config.handlers[i]; ++i) {
-      var match = config.handlers[i][0](req.uri.path);
+      var match = config.handlers[i][0](req.pathname);
       if (match) {
-        req.uri.match = match;
+        req.match = match;
         config.handlers[i][1](req, res);
         break;
       }

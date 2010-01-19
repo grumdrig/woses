@@ -14,4 +14,4 @@ Usage
 `$ node woses.js`
 
 
-Tested with Node version 0.1.18.
+Tested with Node version v0.1.25-15-g4e16e38
