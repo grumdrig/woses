@@ -76,17 +76,6 @@ function respondWithJsRpc(req, res) {
 }
 
 
-function respondWithMarkdown(req, res) {
-  sys.exec("Markdown.pl < " + req.uri.filename)
-  .addCallback(function (stdout, stderr) {
-    res.respond(stdout);})
-  .addErrback(function (code, stdout, stderr) {
-    res.status = 404;
-    res.respond("404: Mark my words. No such file.");
-  });
-}
-
-
 function respondWithStatic(req, res) {
   var content_type = config.mimetypes[req.uri.ext] || "text/plain";
   res.encoding = (content_type.slice(0,4) === 'text' ? 'utf8' : 'binary');
@@ -121,7 +110,6 @@ var config = {
   handlers: [
     [/\.php$/, respondWithPhp],
     [/-rpc\.js$/, respondWithJsRpc],
-    [/\.md$/, respondWithMarkdown],
     [/$/, respondWithStatic]
   ]
 }
