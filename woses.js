@@ -25,13 +25,14 @@ var
   sys   = require('sys'),
   posix = require('posix'),
   http  = require('http'),
-  url   = require('url');
+  url   = require('url'),
+  path  = require('path');
 
 
 function respondWithPhp(req, res) {
   res.body = '';
   var parp = __filename.split('/').slice(0,-1).concat("parp.php").join("/");
-  var params = [parp, req.filename];
+  var params = [parp, req.filepath];
   for (var param in req.query)
     params.push(escape(param) + "=" + escape(req.query[param]));
   params.push("-s");
@@ -65,7 +66,7 @@ function respondWithPhp(req, res) {
 function respondWithJsRpc(req, res) {
   // TODO: use conf file to distinguish client & server js
   try {
-    var script = require(req.basename);
+    var script = require(req.basepath);
     // TODO: don't have fetch call respond - just set body
     var len = script.fetch(req, res);
     sys.puts(req.requestLine + " " + len);
@@ -78,16 +79,16 @@ function respondWithJsRpc(req, res) {
 
 
 function respondWithStatic(req, res) {
-  var content_type = config.mimetypes[req.ext] || "text/plain";
+  var content_type = config.mimetypes[req.extname] || "text/plain";
   res.encoding = (content_type.slice(0,4) === 'text' ? 'utf8' : 'binary');
-  var promise = posix.cat(req.filename, res.encoding);
+  var promise = posix.cat(req.filepath, res.encoding);
   promise.addCallback(function(data) {
     res.header('Content-Type', content_type);
     sys.puts(req.requestLine + " " + data.length);
     res.respond(data);
   });
   promise.addErrback(function(data) {
-    sys.puts("Error 404: " + req.filename);
+    sys.puts("Error 404: " + req.filepath);
     res.status = 404;
     res.header('Content-Type', 'text/plain');
     res.respond('404: I looked but did not find.');
@@ -99,14 +100,14 @@ var config = {
   port: 8080,
   index: "index.html",
   mimetypes: {
-    "css" : "text/css",
-    "html": "text/html",
-    "ico" : "image/vnd.microsoft.icon",
-    "jpg" : "image/jpeg",
-    "js"  : "application/javascript",
-    "png" : "image/png",
-    "xml" : "application/xml",
-    "xul" : "application/vnd.mozilla.xul+xml",
+    ".css" : "text/css",
+    ".html": "text/html",
+    ".ico" : "image/vnd.microsoft.icon",
+    ".jpg" : "image/jpeg",
+    ".js"  : "application/javascript",
+    ".png" : "image/png",
+    ".xml" : "application/xml",
+    ".xul" : "application/vnd.mozilla.xul+xml",
   },
   handlers: [
     [/\.php$/, respondWithPhp],
@@ -124,23 +125,22 @@ require.paths.push(process.cwd());
 try {
   posix.stat(config.index).wait();
 } catch (e) {
-  config.index = "index.php"
+  config.index = "index.html"
 }
 
 try {
   var cf = require(".woses-conf");
-  if (cf.mimetypes) {
-    process.mixin(config.mimetypes, cf.mimetypes);
-    delete cf.mimetypes;
-  }
-  if (cf.handlers) {
-    config.handlers = cf.handlers.concat(config.handlers);
-    delete cf.handlers;
-  }
-  process.mixin(config, cf);
-  config.validate();
 } catch (e) {
   // No config file is OK
+  var cf = {}
+}
+config.port = cf.port || config.port;
+config.index = cf.index || config.index
+if (cf.mimetypes) {
+  process.mixin(config.mimetypes, cf.mimetypes);
+}
+if (cf.handlers) {
+  config.handlers = cf.handlers.concat(config.handlers);
 }
 
 
@@ -151,9 +151,6 @@ http.createServer(function(req, res) {
   if (config.logRequestHeaders)
     sys.p(req.headers);
 
-  if (req.url == '/')
-    req.url = "/" + config.index;
-  
   res.respond = function (body) {
     this.sendHeader(this.status || 200, this.headers);
     this.body = body || this.body || "";
@@ -164,7 +161,7 @@ http.createServer(function(req, res) {
     var result = this.body ? this.body.length : 0;
     this.encoding = this.encoding || 'utf8';
     res.header('Content-Length', (this.encoding === 'utf8' ? 
-                       encodeURIComponent(this.body).replace(/%../g, 'x').length : 
+                  encodeURIComponent(this.body).replace(/%../g, 'x').length : 
                                   this.body.length));
     this.sendBody(this.body, this.encoding);
     this.finish();
@@ -176,16 +173,20 @@ http.createServer(function(req, res) {
     this.headers.push([header, value]);
   }
 
-  req.query = req.query || {};
   process.mixin(req, url.parse(req.url, true));
-  var uriparts = RegExp("^/((.+?)(\\.([a-z]+))?)$")(req.pathname);
-  if (!uriparts) {
+  req.query = req.query || {};
+  if (req.pathname.substr(0,1) != '/') {
     res.status = 400;
     return res.respond("400: I have no idea what that is");
   }
-  req.filename = uriparts[1];
-  req.basename = uriparts[2];
-  req.ext = uriparts[4];
+  req.filepath = req.pathname.substr(1) || config.index;      // path/name.ext
+  if (!path.basename(req.filepath)) 
+    req.filepath = path.join(req.filepath, config.index);
+  req.filename = path.basename(req.filepath);                 // name.ext
+  req.extname  = path.extname(req.filename);                  // .ext
+  req.basename = path.basename(req.filename, req.extname);    // name
+  req.basepath = path.join(path.dirname(req.filepath), 
+                           req.basename);                     // path.name
 
   // Exclude ".." in uri
   if (req.pathname.indexOf('..') >= 0 || req.filename.substr(0,1) == ".") {
@@ -205,7 +206,6 @@ http.createServer(function(req, res) {
     if (ct == "application/x-www-form-urlencoded") {
       var querystring = require("querystring");
       var form = querystring.parse(req.body);
-      sys.p(form);
       for (var param in form) 
         req.query[param] = form[param];
     } else if (ct == "application/json") {

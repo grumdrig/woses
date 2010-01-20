@@ -1,7 +1,7 @@
 var sys = require("sys");
 
 exports.mimetypes = {
-  gif: "image/gif"
+  '.gif': "image/gif"
 }
 
 exports.port = 8080;
@@ -9,7 +9,7 @@ exports.port = 8080;
 //exports.logRequestHeaders = true;
 
 function respondWithMarkdown(req, res) {
-  sys.exec("Markdown.pl < " + req.filename)
+  sys.exec("Markdown.pl < " + req.filepath)
   .addCallback(function (stdout, stderr) {
     res.respond(stdout);})
   .addErrback(function (code, stdout, stderr) {
@@ -19,5 +19,5 @@ function respondWithMarkdown(req, res) {
 }
 
 exports.handlers = [
-  [/\.(md|markdown)$/, respondWithMarkdown]
+  [/\.(md|mkd|markdown)$/, respondWithMarkdown]
 ];
