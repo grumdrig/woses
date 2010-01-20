@@ -67,14 +67,14 @@ function respondWithJsRpc(req, res) {
   // TODO: use conf file to distinguish client & server js
   try {
     var script = require(req.basepath);
-    // TODO: don't have fetch call respond - just set body
-    var len = script.fetch(req, res);
-    sys.puts(req.requestLine + " " + len);
   } catch (e) {
     res.status = 404
-    res.respond("404: In absentia. Or elsewhere.\n" +
-                sys.inspect(e));
+    res.respond("404: In absentia or error in module.\n" + sys.inspect(e));
+    return;
   }
+  script.fetch(req, res);
+  var len = res.respond();
+  sys.puts(req.requestLine + " " + len);
 }
 
 
@@ -121,12 +121,6 @@ if (process.ARGV.length > 2)
   process.chdir(process.ARGV[2]);
 
 require.paths.push(process.cwd());
-
-try {
-  posix.stat(config.index).wait();
-} catch (e) {
-  config.index = "index.html"
-}
 
 try {
   var cf = require(".woses-conf");
