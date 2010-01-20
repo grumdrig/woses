@@ -32,8 +32,8 @@ function respondWithPhp(req, res) {
   res.body = '';
   var parp = __filename.split('/').slice(0,-1).concat("parp.php").join("/");
   var params = [parp, req.filename];
-  for (var param in req.params)
-    params.push(escape(param) + "=" + escape(req.params[param]));
+  for (var param in req.query)
+    params.push(escape(param) + "=" + escape(req.query[param]));
   params.push("-s");
   params.push("HTTP_USER_AGENT=" + req.headers['user-agent']);
   params.push("HTTP_HOST=" + req.headers['host']);
@@ -193,17 +193,6 @@ http.createServer(function(req, res) {
     return res.respond("403: Don't hack me, bro");
   }
 
-  function decodeForm(data) {
-    var result = {};
-    data
-    .split("&")
-    .map(function (assignment) { return assignment.split("=").map(
-      function (tok) { return decodeURIComponent(tok.replace(/\+/g, " "));})})
-    .forEach(function(pair) { result[pair[0]] = pair[1]; });
-    return result;
-  }
-
-  req.params = req.query;  // TODO: get rid of this redundancy
   req.body = '';
   req.addListener('body', function(chunk) {
     req.pause();
@@ -214,12 +203,14 @@ http.createServer(function(req, res) {
     var ct = req.headers['content-type'];
     if (ct) ct = ct.split(';')[0];
     if (ct == "application/x-www-form-urlencoded") {
-      var form = decodeForm(req.body);
+      var querystring = require("querystring");
+      var form = querystring.parse(req.body);
+      sys.p(form);
       for (var param in form) 
-        req.params[param] = form[param];
+        req.query[param] = form[param];
     } else if (ct == "application/json") {
       req.json = JSON.parse(req.body);
-      process.mixin(req.params, req.json);
+      process.mixin(req.query, req.json);
     }
 
     for (var i = 0; config.handlers[i]; ++i) {
