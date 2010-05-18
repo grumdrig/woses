@@ -21,7 +21,9 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 // Usage: node woses.js DOCUMENT_ROOT
 //
 
-var 
+"use strict";
+
+var
   sys   = require('sys'),
   posix = require('posix'),
   http  = require('http'),
@@ -37,7 +39,7 @@ function respondWithPhp(req, res) {
     params.push(escape(param) + "=" + escape(req.query[param]));
   params.push("-s");
   params.push("HTTP_USER_AGENT=" + req.headers['user-agent']);
-  params.push("HTTP_HOST=" + req.headers['host']);
+  params.push("HTTP_HOST=" + req.headers.host);
   params.push("REQUEST_URI=" + req.url);
   var promise = process.createChildProcess("php", params);
   promise.addListener("output", function (data) {
@@ -46,7 +48,7 @@ function respondWithPhp(req, res) {
       res.body += data;
     } else {
       res.header("Content-Type", (res.body.indexOf("<?xml") == 0) ?
-                 "application/xml" : "text/html")
+                 "application/xml" : "text/html");
       sys.puts(req.requestLine + " (php) " + res.body.length);
       if (res.body.match(/^404:/)) 
         res.status = 404;
@@ -55,7 +57,7 @@ function respondWithPhp(req, res) {
     setTimeout(function(){req.resume();});
   });
   promise.addListener("error", function(content) {
-    if (content != null) {
+    if (content !== null) {
       sys.puts("STDERR (php): " + content);
       //return res.respond('500: Sombody said something shocking.');
     }
@@ -101,6 +103,7 @@ var config = {
   index: "index.html",
   mimetypes: {
     ".css" : "text/css",
+    ".gif" : "image/gif",
     ".html": "text/html",
     ".ico" : "image/vnd.microsoft.icon",
     ".jpg" : "image/jpeg",
@@ -126,10 +129,10 @@ try {
   var cf = require(".woses-conf");
 } catch (e) {
   // No config file is OK
-  var cf = {}
+  var cf = {};
 }
 config.port = cf.port || config.port;
-config.index = cf.index || config.index
+config.index = cf.index || config.index;
 if (cf.mimetypes) {
   process.mixin(config.mimetypes, cf.mimetypes);
 }
@@ -200,8 +203,7 @@ http.createServer(function(req, res) {
     if (ct == "application/x-www-form-urlencoded") {
       var querystring = require("querystring");
       var form = querystring.parse(req.body);
-      for (var param in form) 
-        req.query[param] = form[param];
+      process.mixin(req.query, form);
     } else if (ct == "application/json") {
       req.json = JSON.parse(req.body);
       process.mixin(req.query, req.json);
