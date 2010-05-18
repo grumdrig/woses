@@ -24,11 +24,11 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 "use strict";
 
 var
-  sys   = require('sys'),
-  posix = require('posix'),
-  http  = require('http'),
-  url   = require('url'),
-  path  = require('path');
+  sys  = require('sys'),
+  fs   = require('fs'),
+  http = require('http'),
+  url  = require('url'),
+  path = require('path');
 
 
 function respondWithPhp(req, res) {
@@ -41,26 +41,21 @@ function respondWithPhp(req, res) {
   params.push("HTTP_USER_AGENT=" + req.headers['user-agent']);
   params.push("HTTP_HOST=" + req.headers.host);
   params.push("REQUEST_URI=" + req.url);
-  var promise = process.createChildProcess("php", params);
-  promise.addListener("output", function (data) {
-    req.pause();
-    if (data != null) {
-      res.body += data;
-    } else {
-      res.header("Content-Type", (res.body.indexOf("<?xml") == 0) ?
-                 "application/xml" : "text/html");
-      sys.puts(req.requestLine + " (php) " + res.body.length);
-      if (res.body.match(/^404:/)) 
-        res.status = 404;
-      res.respond();
-    }
-    setTimeout(function(){req.resume();});
+  var child = require('child_process').spawn("php", params);
+  child.stdout.addListener('data', function (data) {
+    res.body += data;
   });
-  promise.addListener("error", function(content) {
-    if (content !== null) {
-      sys.puts("STDERR (php): " + content);
-      //return res.respond('500: Sombody said something shocking.');
-    }
+  child.stderr.addListener('data', function (data) {
+    sys.puts("STDERR (php): " + content);
+    //return res.respond('500: Sombody said something shocking.');
+  });
+  child.addListener('exit', function (code) {
+    res.header("content-type", (res.body.indexOf("<?xml") === 0) ?
+               "application/xml" : "text/html");
+    sys.puts(req.requestLine + " (php) " + res.body.length);
+    if (res.body.match(/^404:/)) 
+      res.status = 404;
+    res.respond();
   });
 }
 
@@ -83,18 +78,24 @@ function respondWithJsRpc(req, res) {
 function respondWithStatic(req, res) {
   var content_type = config.mimetypes[req.extname] || "text/plain";
   res.encoding = (content_type.slice(0,4) === 'text' ? 'utf8' : 'binary');
-  var promise = posix.cat(req.filepath, res.encoding);
-  promise.addCallback(function(data) {
-    res.header('Content-Type', content_type);
-    sys.puts(req.requestLine + " " + data.length);
-    res.respond(data);
+  fs.readFile(req.filepath, res.encoding, function(err, data) {
+    if (err) {
+      sys.puts("Error 404: " + req.filepath);
+      res.status = 404;
+      res.header('content-type', 'text/plain');
+      res.respond('404: I looked but did not find.');
+    } else {
+      res.header('content-type', content_type);
+      sys.puts(req.requestLine + " " + data.length);
+      res.respond(data);
+    }
   });
-  promise.addErrback(function(data) {
-    sys.puts("Error 404: " + req.filepath);
-    res.status = 404;
-    res.header('Content-Type', 'text/plain');
-    res.respond('404: I looked but did not find.');
-  });
+}
+
+
+function mixin(target, source) {
+  for (name in source)
+    target[name] = source[name];
 }
 
 
@@ -123,6 +124,8 @@ var config = {
 if (process.ARGV.length > 2)
   process.chdir(process.ARGV[2]);
 
+// Read config
+
 require.paths.push(process.cwd());
 
 try {
@@ -131,46 +134,48 @@ try {
   // No config file is OK
   var cf = {};
 }
-config.port = cf.port || config.port;
-config.index = cf.index || config.index;
-if (cf.mimetypes) {
-  process.mixin(config.mimetypes, cf.mimetypes);
-}
-if (cf.handlers) {
-  config.handlers = cf.handlers.concat(config.handlers);
-}
+mixin(config.mimetypes, cf.mimetypes || {});
+delete cf.mimetypes;
 
+config.handlers = cf.handlers.concat(config.handlers || []);
+delete cf.handlers;
+
+mixin(config, cf);
+
+// Go
 
 http.createServer(function(req, res) {
 
   req.requestLine = req.method + " " + req.url +  " HTTP/" + req.httpVersion;
 
-  if (config.logRequestHeaders)
+  if (config.logRequestHeaders) 
     sys.p(req.headers);
 
   res.respond = function (body) {
-    this.sendHeader(this.status || 200, this.headers);
+    this.status = this.status || 200;
     this.body = body || this.body || "";
     if (typeof this.body != 'string') {
       this.header("content-type", "application/json");
       this.body = JSON.stringify(this.body);
     }
-    var result = this.body ? this.body.length : 0;
     this.encoding = this.encoding || 'utf8';
-    res.header('Content-Length', (this.encoding === 'utf8' ? 
-                  encodeURIComponent(this.body).replace(/%../g, 'x').length : 
-                                  this.body.length));
-    this.sendBody(this.body, this.encoding);
-    this.finish();
-    return result;
+    this.length = (this.encoding === 'utf8' ? 
+                   encodeURIComponent(this.body).replace(/%../g, 'x').length : 
+                   this.body.length);
+    this.header('content-length', this.length);
+
+    this.writeHead(this.status, this.headers);
+    this.write(this.body, this.encoding);
+    this.end();
+    return this.body.length;
   }
 
   res.header = function(header, value) {
-    if (!this.headers) this.headers = [];
-    this.headers.push([header, value]);
+    if (!this.headers) this.headers = {};
+    this.headers[header] = value;
   }
 
-  process.mixin(req, url.parse(req.url, true));
+  mixin(req, url.parse(req.url, true));
   req.query = req.query || {};
   if (req.pathname.substr(0,1) != '/') {
     res.status = 400;
@@ -192,21 +197,21 @@ http.createServer(function(req, res) {
   }
 
   req.body = '';
-  req.addListener('body', function(chunk) {
-    req.pause();
+  req.addListener('data', function(chunk) {
+    //req.pause();
     req.body += chunk;
-    setTimeout(function() { req.resume(); });
+    //setTimeout(function() { req.resume(); });
   });
-  req.addListener('complete', function () {
+  req.addListener('end', function () {
     var ct = req.headers['content-type'];
     if (ct) ct = ct.split(';')[0];
     if (ct == "application/x-www-form-urlencoded") {
       var querystring = require("querystring");
       var form = querystring.parse(req.body);
-      process.mixin(req.query, form);
+      mixin(req.query, form);
     } else if (ct == "application/json") {
       req.json = JSON.parse(req.body);
-      process.mixin(req.query, req.json);
+      mixin(req.query, req.json);
     }
 
     for (var i = 0; config.handlers[i]; ++i) {
