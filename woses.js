@@ -137,8 +137,10 @@ try {
 mixin(config.mimetypes, cf.mimetypes || {});
 delete cf.mimetypes;
 
-config.handlers = cf.handlers.concat(config.handlers || []);
-delete cf.handlers;
+if (cf.handlers) {
+  config.handlers = cf.handlers.concat(config.handlers || []);
+  delete cf.handlers;
+}
 
 mixin(config, cf);
 
