@@ -92,10 +92,11 @@ function respondWithStatic(req, res) {
   });
 }
 
-
 function mixin(target, source) {
-  for (name in source)
-    target[name] = source[name];
+  for (var name in source) {
+    if (source.hasOwnProperty(name))
+      target[name] = source[name];
+  }
 }
 
 
