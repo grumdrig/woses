@@ -3,12 +3,12 @@ exports.mimetypes = {
   '.gif': "image/gif"
 }
 
-exports.port = 8080;
+exports.port = 8053;
 
 //exports.logRequestHeaders = true;
 
 function respondWithMarkdown(req, res) {
-  require('child_process').exec("Markdown.pl < " + req.filepath,
+  require('child_process').exec("./Markdown.pl < " + req.filepath,
     function (error, stdout, stderr) {
       if (error) {
         res.status = 404;

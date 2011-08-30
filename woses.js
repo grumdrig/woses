@@ -101,7 +101,7 @@ function mixin(target, source) {
 
 
 var config = {
-  port: 8080,
+  port: 8053,
   index: "index.html",
   mimetypes: {
     ".css" : "text/css",
