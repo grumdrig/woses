@@ -183,8 +183,9 @@ http.createServer(function(req, res) {
     return res.respond("400: I have no idea what that is");
   }
   req.filepath = req.pathname.substr(1) || config.index;      // path/name.ext
-  if (!path.basename(req.filepath))
-    req.filepath = path.join(req.filepath, config.index);
+  if (!path.basename(req.filepath) ||                         // ""
+      path.basename(req.filepath).slice(-1) == "/")           // dir/
+    req.filepath = path.join(req.filepath, config.index);     // dir/index.html
   req.filename = path.basename(req.filepath);                 // name.ext
   req.extname  = path.extname(req.filename);                  // .ext
   req.basename = path.basename(req.filename, req.extname);    // name
