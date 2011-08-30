@@ -53,7 +53,7 @@ function respondWithPhp(req, res) {
     res.header("content-type", (res.body.indexOf("<?xml") === 0) ?
                "application/xml" : "text/html");
     sys.puts(req.requestLine + " (php) " + res.body.length);
-    if (res.body.match(/^404:/)) 
+    if (res.body.match(/^404:/))
       res.status = 404;
     res.respond();
   });
@@ -63,9 +63,9 @@ function respondWithPhp(req, res) {
 function respondWithJsRpc(req, res) {
   // TODO: use conf file to distinguish client & server js
   try {
-    var script = require(req.basepath);
+    var script = require(path.join(process.cwd(), req.basepath));
   } catch (e) {
-    res.status = 404
+    res.status = 404;
     res.respond("404: In absentia or error in module.\n" + sys.inspect(e));
     return;
   }
@@ -127,10 +127,8 @@ if (process.ARGV.length > 2)
 
 // Read config
 
-require.paths.push(process.cwd());
-
 try {
-  var cf = require(".woses-conf");
+  var cf = require(path.join(process.cwd(), ".woses-conf"));
 } catch (e) {
   // No config file is OK
   var cf = {};
@@ -151,7 +149,7 @@ http.createServer(function(req, res) {
 
   req.requestLine = req.method + " " + req.url +  " HTTP/" + req.httpVersion;
 
-  if (config.logRequestHeaders) 
+  if (config.logRequestHeaders)
     sys.p(req.headers);
 
   res.respond = function (body) {
@@ -162,8 +160,8 @@ http.createServer(function(req, res) {
       this.body = JSON.stringify(this.body);
     }
     this.encoding = this.encoding || 'utf8';
-    this.length = (this.encoding === 'utf8' ? 
-                   encodeURIComponent(this.body).replace(/%../g, 'x').length : 
+    this.length = (this.encoding === 'utf8' ?
+                   encodeURIComponent(this.body).replace(/%../g, 'x').length :
                    this.body.length);
     this.header('content-length', this.length);
 
@@ -171,12 +169,12 @@ http.createServer(function(req, res) {
     this.write(this.body, this.encoding);
     this.end();
     return this.body.length;
-  }
+  };
 
   res.header = function(header, value) {
     if (!this.headers) this.headers = {};
     this.headers[header] = value;
-  }
+  };
 
   mixin(req, url.parse(req.url, true));
   req.query = req.query || {};
@@ -185,12 +183,12 @@ http.createServer(function(req, res) {
     return res.respond("400: I have no idea what that is");
   }
   req.filepath = req.pathname.substr(1) || config.index;      // path/name.ext
-  if (!path.basename(req.filepath)) 
+  if (!path.basename(req.filepath))
     req.filepath = path.join(req.filepath, config.index);
   req.filename = path.basename(req.filepath);                 // name.ext
   req.extname  = path.extname(req.filename);                  // .ext
   req.basename = path.basename(req.filename, req.extname);    // name
-  req.basepath = path.join(path.dirname(req.filepath), 
+  req.basepath = path.join(path.dirname(req.filepath),
                            req.basename);                     // path.name
 
   // Exclude ".." in uri
@@ -218,7 +216,7 @@ http.createServer(function(req, res) {
     }
 
     for (var i = 0; config.handlers[i]; ++i) {
-      var match = config.handlers[i][0](req.pathname);
+      var match = config.handlers[i][0].exec(req.pathname);
       if (match) {
         req.match = match;
         config.handlers[i][1](req, res);
@@ -230,6 +228,6 @@ http.createServer(function(req, res) {
 }).listen(config.port);
 
 
-sys.puts('Woses running at http://127.0.0.1:' + 
-         config.port + '/ in ' + 
+sys.puts('Woses running at http://127.0.0.1:' +
+         config.port + '/ in ' +
          process.cwd());
