@@ -24,7 +24,8 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 "use strict";
 
 var
-  sys  = require('sys'),
+  util  = require('util'),
+  console = require('console'),
   fs   = require('fs'),
   http = require('http'),
   url  = require('url'),
@@ -46,13 +47,13 @@ function respondWithPhp(req, res) {
     res.body += data;
   });
   child.stderr.addListener('data', function (data) {
-    sys.puts("STDERR (php): " + content);
+    console.log("STDERR (php): " + content);
     //return res.respond('500: Sombody said something shocking.');
   });
   child.addListener('exit', function (code) {
     res.header("content-type", (res.body.indexOf("<?xml") === 0) ?
                "application/xml" : "text/html");
-    sys.puts(req.requestLine + " (php) " + res.body.length);
+    console.log(req.requestLine + " (php) " + res.body.length);
     if (res.body.match(/^404:/))
       res.status = 404;
     res.respond();
@@ -66,12 +67,13 @@ function respondWithJsRpc(req, res) {
     var script = require(path.join(process.cwd(), req.basepath));
   } catch (e) {
     res.status = 404;
-    res.respond("404: In absentia or error in module.\n" + sys.inspect(e));
+    res.respond("404: In absentia or error in module.\n" + util.inspect(e));
     return;
   }
-  script.fetch(req, res);
-  var len = res.respond();
-  sys.puts(req.requestLine + " " + len);
+  script.fetch(req, res, () => {
+    var len = res.respond();
+    console.log(req.requestLine + " " + len);
+  });
 }
 
 
@@ -80,13 +82,13 @@ function respondWithStatic(req, res) {
   res.encoding = (content_type.slice(0,4) === 'text' ? 'utf8' : 'binary');
   fs.readFile(req.filepath, res.encoding, function(err, data) {
     if (err) {
-      sys.puts("Error 404: " + req.filepath);
+      console.log("Error 404: " + req.filepath);
       res.status = 404;
       res.header('content-type', 'text/plain');
       res.respond('404: I looked but did not find.');
     } else {
       res.header('content-type', content_type);
-      sys.puts(req.requestLine + " " + data.length);
+      console.log(req.requestLine + " " + data.length);
       res.respond(data);
     }
   });
@@ -122,8 +124,8 @@ var config = {
 }
 
 
-if (process.ARGV.length > 2)
-  process.chdir(process.ARGV[2]);
+if (process.argv.length > 2)
+  process.chdir(process.argv[2]);
 
 // Read config
 
@@ -150,24 +152,27 @@ http.createServer(function(req, res) {
   req.requestLine = req.method + " " + req.url +  " HTTP/" + req.httpVersion;
 
   if (config.logRequestHeaders)
-    sys.p(req.headers);
+    util.p(req.headers);
 
   res.respond = function (body) {
-    this.status = this.status || 200;
-    this.body = body || this.body || "";
-    if (typeof this.body != 'string') {
-      this.header("content-type", "application/json");
-      this.body = JSON.stringify(this.body);
-    }
-    this.encoding = this.encoding || 'utf8';
-    this.length = (this.encoding === 'utf8' ?
-                   encodeURIComponent(this.body).replace(/%../g, 'x').length :
-                   this.body.length);
-    this.header('content-length', this.length);
+    if (!this.responded) {
+      this.responded = true;
+      this.status = this.status || 200;
+      this.body = body || this.body || "";
+      if (typeof this.body != 'string') {
+        this.header("content-type", "application/json");
+        this.body = JSON.stringify(this.body);
+      }
+      this.encoding = this.encoding || 'utf8';
+      this.length = (this.encoding === 'utf8' ?
+                     encodeURIComponent(this.body).replace(/%../g, 'x').length :
+                     this.body.length);
+      this.header('content-length', this.length);
 
-    this.writeHead(this.status, this.headers);
-    this.write(this.body, this.encoding);
-    this.end();
+      this.writeHead(this.status, this.headers);
+      this.write(this.body, this.encoding);
+      this.end();
+    }
     return this.body.length;
   };
 
@@ -229,6 +234,6 @@ http.createServer(function(req, res) {
 }).listen(config.port);
 
 
-sys.puts('Woses running at http://127.0.0.1:' +
+console.log('Woses running at http://127.0.0.1:' +
          config.port + '/ in ' +
          process.cwd());
